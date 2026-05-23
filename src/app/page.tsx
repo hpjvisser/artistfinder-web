@@ -1,65 +1,203 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import Papa from 'papaparse'
+
+type Opportunity = {
+  title: string
+  organization: string
+  country: string
+  city: string
+  deadline: string
+  opportunity_type: string
+  compensation: string
+  eligibility: string
+  source_url: string
+  summary: string
+  disciplines: string
+  source_quality: string
+}
+
+function deadlineLabel(deadline: string) {
+  if (!deadline) return 'Rolling'
+
+  const d = new Date(deadline)
+  if (isNaN(d.getTime())) return deadline
+
+  const now = new Date()
+  const diff = Math.ceil(
+    (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  if (diff < 0) return 'Expired'
+  if (diff <= 14) return `${diff} days left`
+
+  return deadline
+}
+
+function badgeColor(type: string) {
+  if (type === 'grant') return 'bg-green-100 text-green-800'
+  if (type === 'residency') return 'bg-blue-100 text-blue-800'
+  return 'bg-purple-100 text-purple-800'
+}
+
+function trustColor(level: string) {
+  if (level === 'high') return 'bg-black text-white'
+  if (level === 'medium') return 'bg-gray-200 text-black'
+  return 'bg-yellow-100 text-yellow-800'
+}
 
 export default function Home() {
+  const [data, setData] = useState<Opportunity[]>([])
+  const [query, setQuery] = useState('')
+  const [country, setCountry] = useState('')
+  const [type, setType] = useState('')
+  const [sort, setSort] = useState('deadline')
+
+  useEffect(() => {
+    Papa.parse('/opportunities.csv', {
+      download: true,
+      header: true,
+      complete: (results) => {
+        setData(results.data as Opportunity[])
+      },
+    })
+  }, [])
+
+  const countries = useMemo(() => {
+    return [...new Set(data.map((d) => d.country).filter(Boolean))].sort()
+  }, [data])
+
+  const filtered = useMemo(() => {
+    let items = data.filter((item) => {
+      const q = query.toLowerCase()
+
+      const matchesQuery =
+        !q ||
+        item.title?.toLowerCase().includes(q) ||
+        item.organization?.toLowerCase().includes(q) ||
+        item.summary?.toLowerCase().includes(q)
+
+      const matchesCountry = !country || item.country === country
+      const matchesType = !type || item.opportunity_type === type
+
+      return matchesQuery && matchesCountry && matchesType
+    })
+
+    if (sort === 'organization') {
+      items.sort((a, b) =>
+        a.organization.localeCompare(b.organization)
+      )
+    }
+
+    return items
+  }, [data, query, country, type, sort])
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto p-8">
+        <div className="mb-10">
+          <h1 className="text-5xl font-bold mb-3">Artist Finder</h1>
+          <p className="text-gray-600 text-lg">
+            Discover grants, residencies and open calls for visual artists across Europe
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <div className="sticky top-0 bg-gray-50 py-6 z-10">
+          <div className="grid md:grid-cols-4 gap-4">
+            <input
+              className="border border-gray-300 bg-white p-3 rounded-xl"
+              placeholder="Search..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+            <select
+              className="border border-gray-300 bg-white p-3 rounded-xl"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+            >
+              <option value="">All countries</option>
+              {countries.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+
+            <select
+              className="border border-gray-300 bg-white p-3 rounded-xl"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+            >
+              <option value="">All opportunity types</option>
+              <option value="residency">Residency</option>
+              <option value="grant">Grant</option>
+              <option value="open_call">Open call</option>
+            </select>
+
+            <select
+              className="border border-gray-300 bg-white p-3 rounded-xl"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
+              <option value="deadline">Sort: default</option>
+              <option value="organization">Sort: organization</option>
+            </select>
+          </div>
+
+          <div className="mt-4 text-sm text-gray-500">
+            {filtered.length} opportunities
+          </div>
         </div>
-      </main>
-    </div>
-  );
+
+        <div className="grid gap-5 mt-6">
+          {filtered.map((item, i) => (
+            <a
+              key={i}
+              href={item.source_url}
+              target="_blank"
+              className="block bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition"
+            >
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeColor(item.opportunity_type)}`}>
+                  {item.opportunity_type}
+                </span>
+
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${trustColor(item.source_quality)}`}>
+                  {item.source_quality} trust
+                </span>
+              </div>
+
+              <h2 className="text-2xl font-semibold mb-2">
+                {item.title}
+              </h2>
+
+              <p className="text-gray-600 mb-4">
+                {item.organization} • {item.city} {item.country}
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-4 mb-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Deadline</span>
+                  <div className="font-medium">
+                    {deadlineLabel(item.deadline)}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-gray-500">Compensation</span>
+                  <div className="font-medium">
+                    {item.compensation || 'Not specified'}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-gray-700 leading-relaxed">
+                {item.summary}
+              </p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </main>
+  )
 }
